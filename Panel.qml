@@ -3,11 +3,8 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
-// The shared gauge-cluster overlay dressed for a memory speed test: read and
-// write dials in MB/s, titled with the installed memory. Modeled line for line
-// on Omarchy's own disk speed test panel, so the two look and behave as a
-// pair. One ram-speedtest run streams both phases and frees its buffer on
-// exit, so dismissal only has to stop the process.
+// Sustained application bandwidth: COPY and TRIAD count useful reads + writes.
+// The Python supervisor terminates the native workers when this panel closes.
 Item {
   id: root
 
@@ -20,10 +17,11 @@ Item {
   property bool running: false
   property bool expectedStop: false
   property bool pendingRun: false
-  property string phase: ""             // "read" | "write" | ""
+  property string phase: ""             // "copy" | "triad" | ""
   property string ramName: ""
-  property string writeMBps: ""
-  property string readMBps: ""
+  property string statusText: ""
+  property string triadMBps: ""
+  property string copyMBps: ""
   property string error: ""
   property string stderrText: ""
 
@@ -63,10 +61,11 @@ Item {
     }
     error = ""
     ramName = ""
-    writeMBps = ""
-    readMBps = ""
+    triadMBps = ""
+    copyMBps = ""
+    statusText = "Preparing sustained memory test"
     stderrText = ""
-    phase = "read"
+    phase = ""
     running = true
     proc.running = true
   }
@@ -76,9 +75,7 @@ Item {
     return isFinite(value) && value > 0 ? value : 0
   }
 
-  // Lines are "ram <description>", then "read <MB/s>" once a second, then
-  // "write <MB/s>". The phase follows whichever figure is streaming, and each
-  // phase's final line is its steady-state average, which the dial settles on.
+  // Scaling is status-only. Each sustained phase finishes with its weighted mean.
   function updateLine(line) {
     var parts = String(line).trim().split(/\s+/)
     if (parts.length < 2) return
@@ -86,14 +83,19 @@ Item {
       ramName = parts.slice(1).join(" ")
       return
     }
+    if (parts[0] === "status") {
+      statusText = parts.slice(1).join(" ")
+      phase = ""
+      return
+    }
     var value = parseFloat(parts[1])
     if (!isFinite(value) || value < 0) return
-    if (parts[0] === "write") {
-      phase = "write"
-      writeMBps = String(value)
-    } else if (parts[0] === "read") {
-      phase = "read"
-      readMBps = String(value)
+    if (parts[0] === "triad") {
+      phase = "triad"
+      triadMBps = String(value)
+    } else if (parts[0] === "copy") {
+      phase = "copy"
+      copyMBps = String(value)
     }
   }
 
@@ -121,6 +123,8 @@ Item {
 
       if (!root.expectedStop && exitCode !== 0) {
         root.error = root.stderrText || "RAM speed test failed"
+        root.copyMBps = ""
+        root.triadMBps = ""
         root.phase = ""
         root.running = false
         return
@@ -135,19 +139,19 @@ Item {
   SpeedTestOverlay {
     fontFamily: Style.font.family
     layerNamespace: "omarchy-ram-speedtest"
-    title: root.ramName
-    leftLabel: "READ"
-    rightLabel: "WRITE"
+    title: [root.ramName, root.statusText].filter(function(text) { return text !== "" }).join("\n\n")
+    leftLabel: "COPY"
+    rightLabel: "TRIAD"
     unit: "MB/s"
     runAgainTooltip: "Measure again"
     running: root.running
-    leftValue: root.toRate(root.readMBps)
-    rightValue: root.toRate(root.writeMBps)
-    leftLive: root.running && root.phase === "read"
-    rightLive: root.running && root.phase === "write"
+    leftValue: root.toRate(root.copyMBps)
+    rightValue: root.toRate(root.triadMBps)
+    leftLive: root.running && root.phase === "copy"
+    rightLive: root.running && root.phase === "triad"
     error: root.error
     open: root.opened
-    scaleStops: [5000, 10000, 25000, 50000, 100000]
+    scaleStops: [5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000]
     onCloseRequested: root.dismiss()
     onRunAgainRequested: root.runTest()
   }
