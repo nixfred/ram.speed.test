@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Measure live memory read and write speed.
+
+Speaks the same line protocol as omarchy-disk-speedtest, so the panel can hand
+it straight to the shared SpeedTestOverlay:
+
+    ram <module description>
+    read <MB/s>      once a second, then the steady-state average
+    write <MB/s>     once a second, then the steady-state average
+
+What is measured is single-threaded memory bandwidth, the figure mbw and
+sysbench's memory test report: 1 MiB blocks moved between a buffer far larger
+than every CPU cache and a block small enough to live in L2. Read streams the
+big buffer out into the cache-hot block; write streams the cache-hot block
+into the big buffer. Either way the bottleneck is the DIMMs and the memory
+controller, not the cores.
+"""
+
+import os
+import subprocess
+import sys
+import time
+
+PHASE_SECONDS = 8
+BLOCK = 1 << 20          # 1 MiB: fits inside a single core's L2
+BIG = 1 << 30            # 1 GiB: dwarfs L3, so every pass hits DRAM
+MIN_BIG = 256 << 20
+
+
+def fail(message):
+    print(message, file=sys.stderr, flush=True)
+    sys.exit(1)
+
+
+def emit(line):
+    print(line, flush=True)
+
+
+def fmt(rate):
+    if rate <= 0:
+        return "0.0"
+    return f"{rate:.1f}" if rate < 10 else f"{rate:.0f}"
+
+
+def mem_available():
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) * 1024
+    except OSError:
+        pass
+    return 0
+
+
+def describe_ram():
+    """Name the installed memory from the SMBIOS table udev already exposes,
+    so no root is needed: "Micron DDR5-5600 · 2×16 GB"."""
+    try:
+        out = subprocess.run(["udevadm", "info", "-e"], capture_output=True,
+                             text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        out = ""
+    fields = {}
+    for line in out.splitlines():
+        if not line.startswith("E: MEMORY_DEVICE_"):
+            continue
+        key, _, value = line[3:].partition("=")
+        fields[key] = value
+    sticks = []
+    for i in range(64):
+        size = fields.get(f"MEMORY_DEVICE_{i}_SIZE")
+        if size is None:
+            continue
+        if not size.isdigit() or int(size) == 0:
+            continue
+        sticks.append({
+            "size": int(size),
+            "type": fields.get(f"MEMORY_DEVICE_{i}_TYPE", ""),
+            "speed": fields.get(f"MEMORY_DEVICE_{i}_CONFIGURED_SPEED_MTS")
+                     or fields.get(f"MEMORY_DEVICE_{i}_SPEED_MTS", ""),
+            "maker": fields.get(f"MEMORY_DEVICE_{i}_MANUFACTURER", ""),
+        })
+    if not sticks:
+        total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+        return f"{round(total / 2**30)} GB RAM"
+    first = sticks[0]
+    same = all(s["size"] == first["size"] for s in sticks)
+    gb = round(first["size"] / 2**30)
+    size = f"{len(sticks)}×{gb} GB" if same and len(sticks) > 1 else \
+        f"{round(sum(s['size'] for s in sticks) / 2**30)} GB"
+    kind = first["type"] + (f"-{first['speed']}" if first["speed"] else "")
+    maker = first["maker"] if first["maker"] and first["maker"].lower() not in ("unknown", "not specified") else ""
+    return " · ".join(p for p in (" ".join(p for p in (maker, kind) if p), size) if p)
+
+
+def run_phase(phase, big, hot):
+    mv = memoryview(big)
+    span = len(big) - BLOCK
+    off = 0
+    moved = 0
+    start = time.perf_counter()
+    last_t, last_moved = start, 0
+    baseline_t = baseline_moved = None
+    samples = 0
+    deadline = start + PHASE_SECONDS
+    next_tick = start + 1
+
+    while True:
+        # Check the clock every 64 blocks: often enough for a clean
+        # one-second cadence, rare enough to stay out of the measurement.
+        for _ in range(64):
+            if phase == "read":
+                hot[:] = mv[off:off + BLOCK]
+            else:
+                mv[off:off + BLOCK] = hot
+            off += BLOCK
+            if off > span:
+                off = 0
+        moved += 64 * BLOCK
+        now = time.perf_counter()
+        if now < next_tick:
+            continue
+
+        emit(f"{phase} {fmt((moved - last_moved) / (now - last_t) / 1e6)}")
+        samples += 1
+        # The first second is warm-up -- frequency governor ramp, THP
+        # settling -- so the steady-state average starts after it.
+        if samples == 1:
+            baseline_t, baseline_moved = now, moved
+        last_t, last_moved = now, moved
+        next_tick += 1
+        if now >= deadline:
+            break
+
+    if samples > 1 and now > baseline_t:
+        emit(f"{phase} {fmt((moved - baseline_moved) / (now - baseline_t) / 1e6)}")
+
+
+def main():
+    emit(f"ram {describe_ram()}")
+
+    # Leave the rest of the desktop plenty of headroom: the buffer never
+    # takes more than a quarter of what is currently available.
+    size = BIG
+    while size > MIN_BIG and size > mem_available() // 4:
+        size //= 2
+    if size > mem_available() // 2:
+        fail("Not enough free memory to run the test")
+
+    try:
+        big = bytearray(size)
+        hot = bytearray(os.urandom(BLOCK))
+    except MemoryError:
+        fail("Could not allocate the test buffer")
+
+    # Fault every page in with real data before anything is timed, or the
+    # first pass would measure the kernel handing out zero pages.
+    mv = memoryview(big)
+    for off in range(0, size, BLOCK):
+        mv[off:off + BLOCK] = hot
+
+    run_phase("read", big, hot)
+    run_phase("write", big, hot)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (KeyboardInterrupt, BrokenPipeError):
+        sys.exit(143)

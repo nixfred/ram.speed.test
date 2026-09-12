@@ -1,0 +1,4 @@
+__pycache__/
+*.py[cod]
+# Full-desktop verification captures stay local.
+evidence/
