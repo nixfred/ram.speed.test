@@ -170,6 +170,10 @@ version through Omarchy's plugin workflow, summon it with:
 omarchy-shell shell summon nixfred.ram-speedtest
 ```
 
+The panel runs the quick `--duration 12` mode: about 19 seconds all-in (2.4 s of
+scaling, then about 5 s each of sustained copy and triad, plus warmups). Use the CLI
+default or a longer `--duration` for the full measurement.
+
 `Panel.qml` uses the shared speed-test overlay and consumes `ram`, `status`, `copy`
 and `triad` protocol lines. It does not calculate bandwidth. Scaling samples move
 the COPY dial live so the panel responds immediately, but the final dials are the

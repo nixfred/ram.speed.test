@@ -101,7 +101,8 @@ Item {
 
   Process {
     id: proc
-    command: ["python3", root.pluginDir + "ram-speedtest"]
+    // Quick mode for the dials (~19 s all-in); the 60 s default stays for the CLI.
+    command: ["python3", root.pluginDir + "ram-speedtest", "--duration", "12"]
     stdout: SplitParser { onRead: function(line) { root.updateLine(line) } }
     // Exit and stream-finished have no guaranteed order: when a failed exit
     // beat the collector and published the generic message, replace it with
