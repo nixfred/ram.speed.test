@@ -142,10 +142,11 @@ def main():
 
     # Leave the rest of the desktop plenty of headroom: the buffer never
     # takes more than a quarter of what is currently available.
+    budget = mem_available() // 4
     size = BIG
-    while size > MIN_BIG and size > mem_available() // 4:
+    while size > MIN_BIG and size > budget:
         size //= 2
-    if size > mem_available() // 2:
+    if size > budget:
         fail("Not enough free memory to run the test")
 
     try:

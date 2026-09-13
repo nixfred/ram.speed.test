@@ -27,7 +27,7 @@ This is not a lookalike. Omarchy's network and disk tests both render through on
 
 ## Right where you'd look for it
 
-**Menu › Trigger › Speed Test › RAM Speed Test**, next to the other two. Search it from the launcher too:
+**Menu › Trigger › Speed Test › RAM Speed Test**, next to the other two, after the one-line menu entry in [Put it in the menu](#put-it-in-the-menu). Search it from the launcher too:
 
 <div align="center">
 
