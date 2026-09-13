@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "nixfred.ram-speedtest",
   "name": "RAM speed test",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "nixfred",
   "license": "MIT",
-  "description": "Live memory read and write speed dials, in the same gauge cluster as the built-in network and disk speed tests. Summon with: omarchy-shell shell summon nixfred.ram-speedtest",
+  "description": "Sustained multi-core memory copy and triad throughput, with thread scaling, pressure checks and JSON reports. Summon with: omarchy-shell shell summon nixfred.ram-speedtest",
   "kinds": [
     "panel"
   ],
