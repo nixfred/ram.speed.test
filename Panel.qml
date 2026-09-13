@@ -75,7 +75,7 @@ Item {
     return isFinite(value) && value > 0 ? value : 0
   }
 
-  // Scaling is status-only. Each sustained phase finishes with its weighted mean.
+  // Scaling samples move the COPY dial live. Each sustained phase finishes with its weighted mean.
   function updateLine(line) {
     var parts = String(line).trim().split(/\s+/)
     if (parts.length < 2) return

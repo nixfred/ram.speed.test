@@ -171,8 +171,9 @@ omarchy-shell shell summon nixfred.ram-speedtest
 ```
 
 `Panel.qml` uses the shared speed-test overlay and consumes `ram`, `status`, `copy`
-and `triad` protocol lines. It does not calculate bandwidth or show the scaling
-sweep as a final dial result. Earlier README screenshots showing READ/WRITE are
+and `triad` protocol lines. It does not calculate bandwidth. Scaling samples move
+the COPY dial live so the panel responds immediately, but the final dials are the
+sustained stages' weighted means. Earlier README screenshots showing READ/WRITE are
 historical and do not represent this version.
 
 After updating an already-loaded version 1 plugin, if the dials still say

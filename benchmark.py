@@ -436,7 +436,10 @@ def main():
                 if args.json:
                     emit("sample", stage=stage, kernel=mode, threads=len(selected),
                          seconds=sample["seconds"], bytes=sample["bytes"], MBps=rate)
-                elif stage == "sustained":
+                else:
+                    # Scaling samples drive the COPY dial too, so the panel is
+                    # visibly alive from the first second; the final dial value
+                    # is still the sustained stage's weighted mean.
                     emit(mode, MBps=rate)
             result = run_native(binary, mode, size, selected, seconds, warmup, guard, on_sample)
             result["stage"] = stage
