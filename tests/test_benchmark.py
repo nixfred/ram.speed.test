@@ -110,9 +110,12 @@ class AdmissionTests(unittest.TestCase):
             with patch.object(b, "memory_state", return_value=(10 * b.MIB,) * 2):
                 with self.assertRaisesRegex(RuntimeError, "Memory pressure"):
                     guard.check()
+            # Other processes swapping (zram desktops) is recorded, not fatal.
             with patch.object(b, "fields", return_value={"pswpout": 1}):
-                with self.assertRaisesRegex(RuntimeError, "swap-out"):
-                    guard.check()
+                guard.check()
+            with patch.object(b, "fields", return_value={"pswpout": 1, "VmSwap": 4}):
+                with self.assertRaisesRegex(RuntimeError, "Benchmark pages were swapped"):
+                    guard.check(pid=12345)
 
     def test_memory_event_and_cpu_throttling_abort(self):
         with patch.object(b, "memory_state", return_value=(8 * 1024 * b.MIB,) * 2), \

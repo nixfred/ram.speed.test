@@ -76,10 +76,11 @@ and its results must not be presented as standard STREAM results. See the
   within one quarter of the smaller of host `MemAvailable` and visible cgroup
   memory headroom. Both `memory.high` and `memory.max` are checked at every visible
   ancestor. Insufficient safe space means refusal, not a smaller cache benchmark.
-- The supervisor checks memory headroom, cgroup memory events, system swap-out,
-  child swapped pages and cgroup CPU throttling about four times per second.
+- The supervisor checks memory headroom, cgroup memory events, the benchmark's
+  own swapped pages and cgroup CPU throttling about four times per second.
   Detected pressure or throttling stops the run and marks the report invalid.
-  Global/sibling activity can therefore invalidate a run conservatively.
+  System-wide swap-out by other processes (routine on zram desktops) does not
+  stop the run; it is recorded as `system_swapout_pages` in the report.
 - Major page faults during the measured interval invalidate the result. Minor
   faults are reported; these can include automatic NUMA balancing or transparent
   huge-page activity and are not automatically treated as swapping.

@@ -201,8 +201,10 @@ class PressureGuard:
             if any(values.get(k, 0) > self.events[group].get(k, 0)
                    for k in ("high", "max", "oom", "oom_kill")):
                 raise RuntimeError("cgroup memory pressure detected; results discarded")
-        if fields("/proc/vmstat").get("pswpout", 0) > self.swapout:
-            raise RuntimeError("System swap-out activity detected; results discarded")
+        # System-wide swap-out is recorded, not fatal: on zram desktops the
+        # kernel routinely moves other processes' cold pages while the arrays
+        # are allocated. The benchmark's own VmSwap and major faults below are
+        # what actually contaminate a measurement.
         if any(value > self.throttled[group] for group, value in self.read_throttled().items()):
             raise RuntimeError("cgroup CPU throttling detected; results discarded")
         if pid:
@@ -449,6 +451,7 @@ def main():
         report["best_short_scaling_threads"] = best_scaling["threads"]
         report["full_core_vs_best_short_scaling_ratio"] = scaling[-1]["mean_MBps"] / best_scaling["mean_MBps"]
         report["valid"] = True
+        report["system_swapout_pages"] = fields("/proc/vmstat").get("pswpout", 0) - guard.swapout
         report["limitations"] = [
             "Synthetic sequential kernels, not a prediction for every application",
             "No per-channel counters, channel-count inference, or guaranteed saturation",
